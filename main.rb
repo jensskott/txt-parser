@@ -4,7 +4,15 @@ require 'net/http'
 require 'json'
 require 'json-compare'
 require 'yajl'
+require 'open-uri'
 
+def write_config(config_file, url)
+  open(config_file, 'wb') do |file|
+    open(url) do |uri|
+      file.write(uri.read)
+    end
+  end
+end
 # Variables
 metadata_endpoint = 'http://169.254.169.254/latest/dynamic/instance-identity/document'
 instance_data = JSON.parse(Net::HTTP.get(URI.parse(metadata_endpoint)))
@@ -12,7 +20,6 @@ config_values = {}
 
 # Connection to Amazon
 ec2 = Aws::EC2::Client.new(region: instance_data['region'])
-s3 = Aws::S3::Client.new(region: instance_data['region'])
 
 # Get tags from instance
 resp = ec2.describe_tags(filters: [{ name: 'resource-id', values: [instance_data['instanceId']] }]).to_h
@@ -31,18 +38,17 @@ dns.getresources(config_values[:url], Resolv::DNS::Resource::IN::TXT).collect do
 end
 
 # Variables again
-bucket = config_values['bucket'].to_s
-key = config_values['config_file'].to_s
+url = config_values['s3_url']
 file = '/etc/logstash/conf.d/logstash.conf'
 
 if File.file?(file)
-  new_file = s3.get_object(bucket: bucket, key: key)
+  new_file = open(url).read
   old_file = File.new(file, 'r')
   new_file = Yajl::Parser.parse(new_file)
   old_file = Yajl::Parser.parse(old_file)
-  if JsonCompare.get_diff(old_file, new_file) == false
-    s3.get_object(response_target: filename, bucket: bucket, key: key)
-  end
+  write_config(file, url) if JsonCompare.get_diff(old_file, new_file) == false
+else
+  write_config(file, url)
 end
 
 # TODO: Discover usage
