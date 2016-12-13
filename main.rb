@@ -6,6 +6,7 @@ require 'json-compare'
 require 'yajl'
 require 'open-uri'
 
+# Write config
 def write_config(config_file, url)
   open(config_file, 'wb') do |file|
     open(url) do |uri|
@@ -13,6 +14,14 @@ def write_config(config_file, url)
     end
   end
 end
+
+# Compare json
+def compare(j1, j2)
+  # j1 = Yajl::Parser.parse(j1)
+  # j2 = Yajl::Parser.parse(j2)
+  JsonCompare.get_diff(j2, j1)
+end
+
 # Variables
 metadata_endpoint = 'http://169.254.169.254/latest/dynamic/instance-identity/document'
 instance_data = JSON.parse(Net::HTTP.get(URI.parse(metadata_endpoint)))
@@ -44,9 +53,7 @@ file = '/etc/logstash/conf.d/logstash.conf'
 if File.file?(file)
   new_file = open(url).read
   old_file = File.new(file, 'r')
-  new_file = Yajl::Parser.parse(new_file)
-  old_file = Yajl::Parser.parse(old_file)
-  write_config(file, url) if JsonCompare.get_diff(old_file, new_file) == false
+  write_config(file, url) if compare(old_file, new_file) == false
 else
   write_config(file, url)
 end
